@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#10231c" />
+    <title>Bird Movement Projection</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header>
+        <p class="eyebrow">Bird movement tool</p>
+        <h1>Minimum projection</h1>
+        <p class="intro">Create an image showing the minimum brightness recorded at each pixel throughout a video.</p>
+      </header>
+
+      <section class="card" aria-labelledby="choose-heading">
+        <h2 id="choose-heading">1. Choose a video</h2>
+        <label class="file-picker" for="video-file">
+          <span class="file-icon" aria-hidden="true">＋</span>
+          <span><strong>Choose video</strong><small>Use a video from Photos or Files</small></span>
+        </label>
+        <input id="video-file" type="file" accept="video/*,.mov" />
+        <p id="file-name" class="file-name" aria-live="polite">No video selected</p>
+        <button id="generate" class="primary" type="button" disabled>Generate projection</button>
+      </section>
+
+      <section id="progress-panel" class="card progress-card" hidden aria-live="polite">
+        <div class="progress-heading"><h2>Processing video</h2><span id="progress-percent">0%</span></div>
+        <div class="progress-track"><div id="progress-bar" class="progress-bar"></div></div>
+        <p id="progress-detail">Preparing video…</p>
+      </section>
+
+      <section id="result-panel" class="card result-card" hidden aria-labelledby="result-heading">
+        <div class="result-heading"><div><p class="eyebrow">Finished</p><h2 id="result-heading">Your projection</h2></div><span id="result-size"></span></div>
+        <div class="image-wrap"><img id="result-image" alt="Minimum-intensity projection of the selected video" /></div>
+        <div class="result-actions">
+          <button id="save" class="primary" type="button">Save image</button>
+          <button id="share" class="secondary" type="button" hidden>Share</button>
+        </div>
+      </section>
+
+      <p id="error" class="error" role="alert" hidden></p>
+      <p class="privacy"><span aria-hidden="true">▣</span> Your video is processed on this device and is not uploaded.</p>
+      <video id="video" muted playsinline preload="metadata" aria-hidden="true"></video>
+      <canvas id="frame-canvas" hidden></canvas>
+    </main>
+    <script src="app.js"></script>
+  </body>
+</html>
