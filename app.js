@@ -44,9 +44,17 @@ function waitForEvent(target, event, timeout = 30000) {
 }
 
 async function seekTo(time) {
-  if (Math.abs(video.currentTime - time) < 0.0005) return;
-  video.currentTime = time;
-  await waitForEvent(video, 'seeked');
+  if (Math.abs(video.currentTime - time) >= 0.0005) {
+    video.currentTime = time;
+    await waitForEvent(video, 'seeked');
+  }
+  // On Safari, `seeked` can fire before the hardware-decoded frame has been
+  // presented. Drawing immediately at that point can capture a black frame.
+  if ('requestVideoFrameCallback' in video) {
+    await new Promise(resolve => video.requestVideoFrameCallback(() => resolve()));
+  } else {
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  }
 }
 
 async function generateProjection() {
