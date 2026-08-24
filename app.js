@@ -13,10 +13,17 @@ const resultSize = document.querySelector('#result-size');
 const saveButton = document.querySelector('#save');
 const shareButton = document.querySelector('#share');
 const errorBox = document.querySelector('#error');
+const debugLog = document.querySelector('#debug-log');
 
 let selectedFile = null;
 let outputBlob = null;
 let outputUrl = null;
+
+function debug(message, details = '') {
+  const line = `[${new Date().toISOString().slice(11, 19)}] ${message}${details ? `\n  ${details}` : ''}`;
+  debugLog.textContent = `${debugLog.textContent === 'Waiting for a processing run.' ? '' : `${debugLog.textContent}\n`}${line}`;
+  console.debug('[Bird Projection]', message, details);
+}
 
 fileInput.addEventListener('change', () => {
   selectedFile = fileInput.files?.[0] || null;
@@ -48,13 +55,10 @@ async function seekTo(time) {
     video.currentTime = time;
     await waitForEvent(video, 'seeked');
   }
-  // On Safari, `seeked` can fire before the hardware-decoded frame has been
-  // presented. Drawing immediately at that point can capture a black frame.
-  if ('requestVideoFrameCallback' in video) {
-    await new Promise(resolve => video.requestVideoFrameCallback(() => resolve()));
-  } else {
-    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-  }
+  // Safari can report `seeked` just before the hardware-decoded frame is
+  // presented. A short bounded delay avoids capturing a black frame without
+  // relying on requestVideoFrameCallback, which may not fire while paused.
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 }
 
 async function generateProjection() {
@@ -66,17 +70,25 @@ async function generateProjection() {
     video.src = objectUrl; video.load(); await waitForEvent(video, 'loadedmetadata');
     const width = video.videoWidth; const height = video.videoHeight;
     if (!width || !height || !Number.isFinite(video.duration)) throw new Error('This video has no usable picture data.');
+    debugLog.textContent = '';
+    debug('Metadata loaded', `file=${selectedFile.name}\nvideo=${width}x${height}\nduration=${video.duration.toFixed(3)} s\nreadyState=${video.readyState}\nnetworkState=${video.networkState}`);
     frameCanvas.width = width; frameCanvas.height = height;
     const context = frameCanvas.getContext('2d', { willReadFrequently: true });
     const pixels = width * height * 4; let minimum = new Uint8Array(width * height * 3); let first = true;
     const fps = Number(video.getVideoPlaybackQuality?.().totalVideoFrames) > 0 ? video.getVideoPlaybackQuality().totalVideoFrames / video.duration : 30;
     const frameCount = Math.max(1, Math.ceil(video.duration * Math.min(Math.max(fps || 30, 1), 60)));
+    debug('Frame plan', `estimatedFps=${(fps || 30).toFixed(3)}\nframes=${frameCount}\ncanvas=${frameCanvas.width}x${frameCanvas.height}`);
     setProgress(0, `Preparing ${width} × ${height} image…`);
     for (let index = 0; index < frameCount; index += 1) {
       const time = Math.min(video.duration - 0.001, index / Math.max(fps || 30, 1));
       await seekTo(Math.max(0, time));
       context.drawImage(video, 0, 0, width, height);
       const source = context.getImageData(0, 0, width, height).data;
+      if (index < 3 || index === frameCount - 1) {
+        let nonBlack = 0; let sourceMax = 0;
+        for (let p = 0; p < source.length; p += 4) { if (source[p] || source[p + 1] || source[p + 2]) nonBlack += 1; sourceMax = Math.max(sourceMax, source[p], source[p + 1], source[p + 2]); }
+        debug(`Decoded frame ${index + 1}`, `time=${video.currentTime.toFixed(3)}\nreadyState=${video.readyState}\npixel[0]=rgb(${source[0]},${source[1]},${source[2]})\nnonBlackPixels=${nonBlack}/${width * height}\nsourceMax=${sourceMax}`);
+      }
       if (first) { for (let p = 0, q = 0; q < minimum.length; p += 4, q += 3) { minimum[q] = source[p]; minimum[q + 1] = source[p + 1]; minimum[q + 2] = source[p + 2]; } first = false; }
       else { for (let p = 0, q = 0; q < minimum.length; p += 4, q += 3) { if (source[p] < minimum[q]) minimum[q] = source[p]; if (source[p + 1] < minimum[q + 1]) minimum[q + 1] = source[p + 1]; if (source[p + 2] < minimum[q + 2]) minimum[q + 2] = source[p + 2]; } }
       if (index % 2 === 0 || index === frameCount - 1) { setProgress((index + 1) / frameCount * 100, `Frame ${index + 1} of approximately ${frameCount}`); await new Promise(requestAnimationFrame); }
@@ -84,10 +96,13 @@ async function generateProjection() {
     const output = context.createImageData(width, height);
     for (let p = 0, q = 0; q < minimum.length; p += 4, q += 3) { const gray = Math.floor(0.299 * minimum[q] + 0.587 * minimum[q + 1] + 0.114 * minimum[q + 2]); output.data[p] = gray; output.data[p + 1] = gray; output.data[p + 2] = gray; output.data[p + 3] = 255; }
     context.putImageData(output, 0, 0);
+    let outputMax = 0; let outputNonBlack = 0;
+    for (let p = 0; p < output.data.length; p += 4) { outputMax = Math.max(outputMax, output.data[p]); if (output.data[p]) outputNonBlack += 1; }
+    debug('Projection complete', `outputMax=${outputMax}\noutputNonBlackPixels=${outputNonBlack}/${width * height}`);
     outputBlob = await new Promise(resolve => frameCanvas.toBlob(resolve, 'image/png'));
     outputUrl = URL.createObjectURL(outputBlob); resultImage.src = outputUrl; resultSize.textContent = `${width} × ${height}`; resultPanel.hidden = false; setProgress(100, 'Projection ready.');
     shareButton.hidden = !navigator.share || !navigator.canShare;
-  } catch (error) { console.error(error); errorBox.textContent = 'This video could not be processed. Try another video or a shorter recording.'; errorBox.hidden = false; }
+  } catch (error) { console.error(error); debug('ERROR', `${error?.name || 'Error'}: ${error?.message || error}`); errorBox.textContent = 'This video could not be processed. Try another video or a shorter recording.'; errorBox.hidden = false; }
   finally { URL.revokeObjectURL(objectUrl); generateButton.disabled = !selectedFile; fileInput.disabled = false; video.removeAttribute('src'); video.load(); }
 }
 
