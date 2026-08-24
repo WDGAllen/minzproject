@@ -84,15 +84,25 @@ async function generateProjection() {
       await seekTo(Math.max(0, time));
       context.drawImage(video, 0, 0, width, height);
       const source = context.getImageData(0, 0, width, height).data;
+      let sourceMax = 0;
+      for (let p = 0; p < source.length; p += 4) sourceMax = Math.max(sourceMax, source[p], source[p + 1], source[p + 2]);
       if (index < 3 || index === frameCount - 1) {
-        let nonBlack = 0; let sourceMax = 0;
-        for (let p = 0; p < source.length; p += 4) { if (source[p] || source[p + 1] || source[p + 2]) nonBlack += 1; sourceMax = Math.max(sourceMax, source[p], source[p + 1], source[p + 2]); }
+        let nonBlack = 0;
+        for (let p = 0; p < source.length; p += 4) if (source[p] || source[p + 1] || source[p + 2]) nonBlack += 1;
         debug(`Decoded frame ${index + 1}`, `time=${video.currentTime.toFixed(3)}\nreadyState=${video.readyState}\npixel[0]=rgb(${source[0]},${source[1]},${source[2]})\nnonBlackPixels=${nonBlack}/${width * height}\nsourceMax=${sourceMax}`);
+      }
+      // Safari can return a completely black canvas for the first read at
+      // time 0 even though the video metadata is ready. Do not seed the
+      // minimum accumulator with that transient empty read.
+      if (first && sourceMax === 0) {
+        debug(`Skipped empty decoded frame ${index + 1}`, 'The first canvas read was all black; accumulator not initialized.');
+        continue;
       }
       if (first) { for (let p = 0, q = 0; q < minimum.length; p += 4, q += 3) { minimum[q] = source[p]; minimum[q + 1] = source[p + 1]; minimum[q + 2] = source[p + 2]; } first = false; }
       else { for (let p = 0, q = 0; q < minimum.length; p += 4, q += 3) { if (source[p] < minimum[q]) minimum[q] = source[p]; if (source[p + 1] < minimum[q + 1]) minimum[q + 1] = source[p + 1]; if (source[p + 2] < minimum[q + 2]) minimum[q + 2] = source[p + 2]; } }
       if (index % 2 === 0 || index === frameCount - 1) { setProgress((index + 1) / frameCount * 100, `Frame ${index + 1} of approximately ${frameCount}`); await new Promise(requestAnimationFrame); }
     }
+    if (first) throw new Error('No non-empty video frames were decoded.');
     const output = context.createImageData(width, height);
     for (let p = 0, q = 0; q < minimum.length; p += 4, q += 3) { const gray = Math.floor(0.299 * minimum[q] + 0.587 * minimum[q + 1] + 0.114 * minimum[q + 2]); output.data[p] = gray; output.data[p + 1] = gray; output.data[p + 2] = gray; output.data[p + 3] = 255; }
     context.putImageData(output, 0, 0);
