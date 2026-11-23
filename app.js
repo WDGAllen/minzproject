@@ -79,11 +79,16 @@ async function generateProjection() {
     const variants = [{ step: 1, offset: 0, title: 'FULL PROJECTION', label: '' }];
     if (document.querySelector('#every-2').checked) for (let offset=0; offset<2; offset++) variants.push({step:2,offset,title:'EVERY 2ND FRAME',label:String.fromCharCode(65+offset)});
     if (document.querySelector('#every-3').checked) for (let offset=0; offset<3; offset++) variants.push({step:3,offset,title:'EVERY 3RD FRAME',label:String.fromCharCode(65+offset)});
+    document.querySelectorAll('.extra-step:checked').forEach(input => {
+      const step=Number(input.dataset.step);
+      for(let offset=0;offset<step;offset++) variants.push({step,offset,title:`EVERY ${step}TH FRAME`,label:String.fromCharCode(65+offset)});
+    });
     variants.forEach(v => { v.minimum = new Uint8Array(width*height*3); v.first=true; });
     const livePreview = document.querySelector('#live-preview').checked;
     let lastPreviewAt = 0;
+    const displayScale=Math.min(1,720/width,480/height);
     const previewCanvas = livePreview ? document.createElement('canvas') : null;
-    if (previewCanvas) { previewCanvas.width=width; previewCanvas.height=height; previewPanel.hidden=false; }
+    if (previewCanvas) { previewCanvas.width=Math.max(1,Math.round(width*displayScale)); previewCanvas.height=Math.max(1,Math.round(height*displayScale)); previewPanel.hidden=false; }
     const fps = Number(video.getVideoPlaybackQuality?.().totalVideoFrames) > 0 ? video.getVideoPlaybackQuality().totalVideoFrames / video.duration : 30;
     const frameCount = Math.max(1, Math.ceil(video.duration * Math.min(Math.max(fps || 30, 1), 60)));
     debug('Frame plan', `estimatedFps=${(fps || 30).toFixed(3)}\nframes=${frameCount}\ncanvas=${frameCanvas.width}x${frameCanvas.height}`);
@@ -112,8 +117,8 @@ async function generateProjection() {
       for (const v of variants) if (index >= v.offset && (index-v.offset)%v.step===0) { const minimum=v.minimum; if(v.first){for(let p=0,q=0;q<minimum.length;p+=4,q+=3){minimum[q]=source[p];minimum[q+1]=source[p+1];minimum[q+2]=source[p+2];}v.first=false;} else {for(let p=0,q=0;q<minimum.length;p+=4,q+=3){minimum[q]=Math.min(minimum[q],source[p]);minimum[q+1]=Math.min(minimum[q+1],source[p+1]);minimum[q+2]=Math.min(minimum[q+2],source[p+2]);}} }
       const now=performance.now();
       if (livePreview && !variants[0].first && (now-lastPreviewAt>=10000 || index===frameCount-1)) {
-        const previewContext=previewCanvas.getContext('2d'); const image=previewContext.createImageData(width,height); const minimum=variants[0].minimum;
-        for(let p=0,q=0;q<minimum.length;p+=4,q+=3){const gray=Math.floor(.299*minimum[q]+.587*minimum[q+1]+.114*minimum[q+2]);image.data[p]=image.data[p+1]=image.data[p+2]=gray;image.data[p+3]=255;}
+        const previewContext=previewCanvas.getContext('2d'); const image=previewContext.createImageData(previewCanvas.width,previewCanvas.height); const minimum=variants[0].minimum;
+        for(let y=0;y<previewCanvas.height;y++)for(let x=0;x<previewCanvas.width;x++){const source=(Math.floor(y/displayScale)*width+Math.floor(x/displayScale))*3;const p=(y*previewCanvas.width+x)*4;const gray=Math.floor(.299*minimum[source]+.587*minimum[source+1]+.114*minimum[source+2]);image.data[p]=image.data[p+1]=image.data[p+2]=gray;image.data[p+3]=255;}
         previewContext.putImageData(image,0,0);
         previewCanvas.toBlob(blob=>{if(blob){if(previewUrl)URL.revokeObjectURL(previewUrl);previewUrl=URL.createObjectURL(blob);previewImage.src=previewUrl;previewFrame.textContent=`Frame ${index+1} of about ${frameCount}`;}},'image/jpeg',0.82);
         lastPreviewAt=now;
@@ -129,7 +134,7 @@ async function generateProjection() {
       let group=resultImages.querySelector(`[data-group="${v.title}"]`);
       if(!group){group=document.createElement('section');group.dataset.group=v.title;group.className='projection-group';const heading=document.createElement('h3');heading.textContent=v.title;group.append(heading);resultImages.append(group);}
       const article=document.createElement('article'); if(v.label){const label=document.createElement('h4');label.textContent=`Image ${v.label}`;article.append(label);}
-      const wrap=document.createElement('div');wrap.className='image-wrap';const img=document.createElement('img');img.src=url;img.alt=`${v.title}${v.label?` ${v.label}`:''} minimum-intensity projection`;wrap.append(img);article.append(wrap);
+      const wrap=document.createElement('div');wrap.className='image-wrap';const img=document.createElement('img');img.src=url;img.width=width;img.height=height;img.alt=`${v.title}${v.label?` ${v.label}`:''} minimum-intensity projection`;wrap.append(img);article.append(wrap);
       const save=document.createElement('button');save.className='secondary save-image';save.textContent='Save image';save.addEventListener('click',()=>{const a=document.createElement('a');a.href=url;a.download=`projection-${v.step}-offset-${v.offset}.png`;a.click();});article.append(save);group.append(article);
     }
     resultPanel.hidden=false; previewPanel.hidden=true; setProgress(100,'Projections ready.');
@@ -138,3 +143,11 @@ async function generateProjection() {
 }
 
 generateButton.addEventListener('click', generateProjection);
+
+document.querySelector('#toggle-extended').addEventListener('click', event => {
+  const options = document.querySelector('#extended-options');
+  const expanded = event.currentTarget.getAttribute('aria-expanded') === 'true';
+  event.currentTarget.setAttribute('aria-expanded', String(!expanded));
+  options.hidden = expanded;
+  event.currentTarget.textContent = expanded ? 'Show options for every 4th–10th frame' : 'Hide options for every 4th–10th frame';
+});
