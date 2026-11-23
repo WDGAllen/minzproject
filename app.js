@@ -86,7 +86,7 @@ async function generateProjection() {
     variants.forEach(v => { v.minimum = new Uint8Array(width*height*3); v.first=true; });
     const livePreview = document.querySelector('#live-preview').checked;
     let lastPreviewAt = 0;
-    const displayScale=Math.min(1,720/width,480/height);
+    const displayScale=Math.min(1,480/width,320/height);
     const previewCanvas = livePreview ? document.createElement('canvas') : null;
     if (previewCanvas) { previewCanvas.width=Math.max(1,Math.round(width*displayScale)); previewCanvas.height=Math.max(1,Math.round(height*displayScale)); previewPanel.hidden=false; }
     const fps = Number(video.getVideoPlaybackQuality?.().totalVideoFrames) > 0 ? video.getVideoPlaybackQuality().totalVideoFrames / video.duration : 30;
@@ -120,7 +120,8 @@ async function generateProjection() {
         const previewContext=previewCanvas.getContext('2d'); const image=previewContext.createImageData(previewCanvas.width,previewCanvas.height); const minimum=variants[0].minimum;
         for(let y=0;y<previewCanvas.height;y++)for(let x=0;x<previewCanvas.width;x++){const source=(Math.floor(y/displayScale)*width+Math.floor(x/displayScale))*3;const p=(y*previewCanvas.width+x)*4;const gray=Math.floor(.299*minimum[source]+.587*minimum[source+1]+.114*minimum[source+2]);image.data[p]=image.data[p+1]=image.data[p+2]=gray;image.data[p+3]=255;}
         previewContext.putImageData(image,0,0);
-        previewCanvas.toBlob(blob=>{if(blob){if(previewUrl)URL.revokeObjectURL(previewUrl);previewUrl=URL.createObjectURL(blob);previewImage.src=previewUrl;previewFrame.textContent=`Frame ${index+1} of about ${frameCount}`;}},'image/jpeg',0.82);
+        previewFrame.textContent=`Frame ${index+1} of about ${frameCount}`;
+        previewCanvas.toBlob(blob=>{if(blob){if(previewUrl)URL.revokeObjectURL(previewUrl);previewUrl=URL.createObjectURL(blob);previewImage.src=previewUrl;}},'image/jpeg',0.82);
         lastPreviewAt=now;
       }
       if (index % 2 === 0 || index === frameCount - 1) { setProgress((index + 1) / frameCount * 100, `Reading frame ${index + 1} of about ${frameCount}`); await new Promise(requestAnimationFrame); }
