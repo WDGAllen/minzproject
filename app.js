@@ -143,11 +143,3 @@ async function generateProjection() {
 }
 
 generateButton.addEventListener('click', generateProjection);
-
-document.querySelector('#toggle-extended').addEventListener('click', event => {
-  const options = document.querySelector('#extended-options');
-  const expanded = event.currentTarget.getAttribute('aria-expanded') === 'true';
-  event.currentTarget.setAttribute('aria-expanded', String(!expanded));
-  options.hidden = expanded;
-  event.currentTarget.textContent = expanded ? 'Show options for every 4th–10th frame' : 'Hide options for every 4th–10th frame';
-});
