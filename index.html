@@ -4,35 +4,36 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#10231c" />
-    <title>Bird Movement Projection</title>
+    <title>Video Projection</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <main class="app-shell">
       <header>
-        <p class="eyebrow">Bird movement tool</p>
-        <h1>Minimum projection</h1>
-        <p class="intro">Create an image showing the minimum brightness recorded at each pixel throughout a video.</p>
+        <h1>Video projection</h1>
+        <p class="intro">See the darkest value recorded at each point in your video. Your video stays on your device.</p>
       </header>
 
       <section class="card" aria-labelledby="choose-heading">
         <h2 id="choose-heading">1. Choose a video</h2>
         <label class="file-picker" for="video-file">
           <span class="file-icon" aria-hidden="true">＋</span>
-          <span><strong>Choose video</strong><small>Use a video from Photos or Files</small></span>
+          <span><strong>Choose a video</strong><small>Choose a video from your device</small></span>
         </label>
         <input id="video-file" type="file" accept="video/*,.mov" />
         <p id="file-name" class="file-name" aria-live="polite">No video selected</p>
         <button id="generate" class="primary" type="button" disabled>Generate projection</button>
         <fieldset class="output-options">
-          <legend>Additional projections</legend>
-          <label><input id="every-2" type="checkbox" checked /> Also generate every-2nd-frame projections</label>
-          <label><input id="every-3" type="checkbox" checked /> Also generate every-3rd-frame projections</label>
+          <legend>More projections</legend>
+          <p class="options-note">Extra projections take longer to create.</p>
+          <label><input id="live-preview" type="checkbox" checked /> Show live full projection <span>updates during processing</span></label>
+          <label><input id="every-2" type="checkbox" checked /> Every 2nd frame <span>2 images</span></label>
+          <label><input id="every-3" type="checkbox" checked /> Every 3rd frame <span>3 images</span></label>
         </fieldset>
       </section>
 
       <section id="progress-panel" class="card progress-card" hidden aria-live="polite">
-        <div class="progress-heading"><h2>Processing video</h2><span id="progress-percent">0%</span></div>
+        <div class="progress-heading"><h2>Creating your projections</h2><span id="progress-percent">0%</span></div>
         <div class="progress-track"><div id="progress-bar" class="progress-bar"></div></div>
         <p id="progress-detail">Preparing video…</p>
       </section>
@@ -42,8 +43,14 @@
         <div id="result-images"></div>
       </section>
 
+      <section id="preview-panel" class="card preview-card" hidden aria-live="polite">
+        <div class="result-heading"><div><p class="eyebrow">Live preview</p><h2>Full projection so far</h2></div><span id="preview-frame"></span></div>
+        <div class="image-wrap"><img id="preview-image" alt="Live minimum-intensity projection as video frames are processed" /></div>
+        <p class="preview-note">This image updates as more frames are included.</p>
+      </section>
+
       <p id="error" class="error" role="alert" hidden></p>
-      <details id="debug-panel" class="debug-panel">
+      <details id="debug-panel" class="debug-panel" hidden>
         <summary>Developer diagnostics</summary>
         <pre id="debug-log">Waiting for a processing run.</pre>
       </details>
