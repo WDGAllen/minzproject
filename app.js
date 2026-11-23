@@ -93,7 +93,7 @@ async function generateProjection() {
       await seekTo(Math.max(0, time));
       context.drawImage(video, 0, 0, width, height);
       const source = context.getImageData(0, 0, width, height).data;
-      let sourceMax = 0;
+      let sourceMax = Math.max(source[0], source[1], source[2]);
       if (index < 3 || index === frameCount - 1) {
         let nonBlack = 0;
         for (let p = 0; p < source.length; p += 4) if (source[p] || source[p + 1] || source[p + 2]) nonBlack += 1;
@@ -102,8 +102,8 @@ async function generateProjection() {
       // Safari can return a completely black canvas for the first read at
       // time 0 even though the video metadata is ready. Do not seed the
       // minimum accumulator with that transient empty read.
-      if (variants.every(v=>v.first) && source[0] === 0 && source[1] === 0 && source[2] === 0) {
-        for (let p=4; p<source.length; p+=4) sourceMax=Math.max(sourceMax,source[p],source[p+1],source[p+2]);
+      if (variants.every(v=>v.first) && sourceMax === 0) {
+        for (let p=4; p<source.length && sourceMax===0; p+=4) sourceMax=Math.max(sourceMax,source[p],source[p+1],source[p+2]);
       }
       if (variants.every(v=>v.first) && sourceMax === 0) {
         debug(`Skipped empty decoded frame ${index + 1}`, 'The first canvas read was all black; accumulator not initialized.');
