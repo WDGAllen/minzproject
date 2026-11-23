@@ -8,16 +8,13 @@ const progressBar = document.querySelector('#progress-bar');
 const progressPercent = document.querySelector('#progress-percent');
 const progressDetail = document.querySelector('#progress-detail');
 const resultPanel = document.querySelector('#result-panel');
-const resultImage = document.querySelector('#result-image');
+const resultImages = document.querySelector('#result-images');
 const resultSize = document.querySelector('#result-size');
-const saveButton = document.querySelector('#save');
-const shareButton = document.querySelector('#share');
 const errorBox = document.querySelector('#error');
 const debugLog = document.querySelector('#debug-log');
 
 let selectedFile = null;
-let outputBlob = null;
-let outputUrl = null;
+let outputUrls = [];
 
 function debug(message, details = '') {
   const line = `[${new Date().toISOString().slice(11, 19)}] ${message}${details ? `\n  ${details}` : ''}`;
@@ -64,7 +61,7 @@ async function seekTo(time) {
 async function generateProjection() {
   if (!selectedFile) return;
   errorBox.hidden = true; resultPanel.hidden = true; progressPanel.hidden = false; generateButton.disabled = true; fileInput.disabled = true;
-  if (outputUrl) URL.revokeObjectURL(outputUrl);
+  outputUrls.forEach(URL.revokeObjectURL); outputUrls = []; resultImages.replaceChildren();
   const objectUrl = URL.createObjectURL(selectedFile);
   try {
     video.src = objectUrl; video.load(); await waitForEvent(video, 'loadedmetadata');
@@ -74,7 +71,10 @@ async function generateProjection() {
     debug('Metadata loaded', `file=${selectedFile.name}\nvideo=${width}x${height}\nduration=${video.duration.toFixed(3)} s\nreadyState=${video.readyState}\nnetworkState=${video.networkState}`);
     frameCanvas.width = width; frameCanvas.height = height;
     const context = frameCanvas.getContext('2d', { willReadFrequently: true });
-    const pixels = width * height * 4; let minimum = new Uint8Array(width * height * 3); let first = true;
+    const variants = [{ step: 1, offset: 0, title: 'FULL PROJECTION', label: '' }];
+    if (document.querySelector('#every-2').checked) for (let offset=0; offset<2; offset++) variants.push({step:2,offset,title:'EVERY 2ND FRAME',label:String.fromCharCode(65+offset)});
+    if (document.querySelector('#every-3').checked) for (let offset=0; offset<3; offset++) variants.push({step:3,offset,title:'EVERY 3RD FRAME',label:String.fromCharCode(65+offset)});
+    variants.forEach(v => { v.minimum = new Uint8Array(width*height*3); v.first=true; });
     const fps = Number(video.getVideoPlaybackQuality?.().totalVideoFrames) > 0 ? video.getVideoPlaybackQuality().totalVideoFrames / video.duration : 30;
     const frameCount = Math.max(1, Math.ceil(video.duration * Math.min(Math.max(fps || 30, 1), 60)));
     debug('Frame plan', `estimatedFps=${(fps || 30).toFixed(3)}\nframes=${frameCount}\ncanvas=${frameCanvas.width}x${frameCanvas.height}`);
@@ -94,28 +94,28 @@ async function generateProjection() {
       // Safari can return a completely black canvas for the first read at
       // time 0 even though the video metadata is ready. Do not seed the
       // minimum accumulator with that transient empty read.
-      if (first && sourceMax === 0) {
+      if (sourceMax === 0 && variants.every(v=>v.first)) {
         debug(`Skipped empty decoded frame ${index + 1}`, 'The first canvas read was all black; accumulator not initialized.');
         continue;
       }
-      if (first) { for (let p = 0, q = 0; q < minimum.length; p += 4, q += 3) { minimum[q] = source[p]; minimum[q + 1] = source[p + 1]; minimum[q + 2] = source[p + 2]; } first = false; }
-      else { for (let p = 0, q = 0; q < minimum.length; p += 4, q += 3) { if (source[p] < minimum[q]) minimum[q] = source[p]; if (source[p + 1] < minimum[q + 1]) minimum[q + 1] = source[p + 1]; if (source[p + 2] < minimum[q + 2]) minimum[q + 2] = source[p + 2]; } }
+      for (const v of variants) if (index >= v.offset && (index-v.offset)%v.step===0) { const minimum=v.minimum; if(v.first){for(let p=0,q=0;q<minimum.length;p+=4,q+=3){minimum[q]=source[p];minimum[q+1]=source[p+1];minimum[q+2]=source[p+2];}v.first=false;} else {for(let p=0,q=0;q<minimum.length;p+=4,q+=3){minimum[q]=Math.min(minimum[q],source[p]);minimum[q+1]=Math.min(minimum[q+1],source[p+1]);minimum[q+2]=Math.min(minimum[q+2],source[p+2]);}} }
       if (index % 2 === 0 || index === frameCount - 1) { setProgress((index + 1) / frameCount * 100, `Frame ${index + 1} of approximately ${frameCount}`); await new Promise(requestAnimationFrame); }
     }
-    if (first) throw new Error('No non-empty video frames were decoded.');
-    const output = context.createImageData(width, height);
-    for (let p = 0, q = 0; q < minimum.length; p += 4, q += 3) { const gray = Math.floor(0.299 * minimum[q] + 0.587 * minimum[q + 1] + 0.114 * minimum[q + 2]); output.data[p] = gray; output.data[p + 1] = gray; output.data[p + 2] = gray; output.data[p + 3] = 255; }
-    context.putImageData(output, 0, 0);
-    let outputMax = 0; let outputNonBlack = 0;
-    for (let p = 0; p < output.data.length; p += 4) { outputMax = Math.max(outputMax, output.data[p]); if (output.data[p]) outputNonBlack += 1; }
-    debug('Projection complete', `outputMax=${outputMax}\noutputNonBlackPixels=${outputNonBlack}/${width * height}`);
-    outputBlob = await new Promise(resolve => frameCanvas.toBlob(resolve, 'image/png'));
-    outputUrl = URL.createObjectURL(outputBlob); resultImage.src = outputUrl; resultSize.textContent = `${width} × ${height}`; resultPanel.hidden = false; setProgress(100, 'Projection ready.');
-    shareButton.hidden = !navigator.share || !navigator.canShare;
+    if (variants.some(v=>v.first)) throw new Error('Not enough non-empty video frames were decoded.');
+    for (const v of variants) {
+      const output=context.createImageData(width,height);
+      for(let p=0,q=0;q<v.minimum.length;p+=4,q+=3){const gray=Math.floor(.299*v.minimum[q]+.587*v.minimum[q+1]+.114*v.minimum[q+2]);output.data[p]=output.data[p+1]=output.data[p+2]=gray;output.data[p+3]=255;}
+      context.putImageData(output,0,0); const blob=await new Promise(resolve=>frameCanvas.toBlob(resolve,'image/png')); const url=URL.createObjectURL(blob); outputUrls.push(url);
+      if (!v.label) resultSize.textContent=`${width} × ${height}`;
+      let group=resultImages.querySelector(`[data-group="${v.title}"]`);
+      if(!group){group=document.createElement('section');group.dataset.group=v.title;group.className='projection-group';const heading=document.createElement('h3');heading.textContent=v.title;group.append(heading);resultImages.append(group);}
+      const article=document.createElement('article'); if(v.label){const label=document.createElement('h4');label.textContent=v.label;article.append(label);}
+      const wrap=document.createElement('div');wrap.className='image-wrap';const img=document.createElement('img');img.src=url;img.alt=`${v.title}${v.label?` ${v.label}`:''} minimum-intensity projection`;wrap.append(img);article.append(wrap);
+      const save=document.createElement('button');save.className='primary';save.textContent=`Save ${v.label?`${v.title} ${v.label}`:v.title.toLowerCase()}`;save.addEventListener('click',()=>{const a=document.createElement('a');a.href=url;a.download=`projection-${v.step}-offset-${v.offset}.png`;a.click();});article.append(save);group.append(article);
+    }
+    resultPanel.hidden=false; setProgress(100,'Projections ready.');
   } catch (error) { console.error(error); debug('ERROR', `${error?.name || 'Error'}: ${error?.message || error}`); errorBox.textContent = 'This video could not be processed. Try another video or a shorter recording.'; errorBox.hidden = false; }
   finally { URL.revokeObjectURL(objectUrl); generateButton.disabled = !selectedFile; fileInput.disabled = false; video.removeAttribute('src'); video.load(); }
 }
 
 generateButton.addEventListener('click', generateProjection);
-saveButton.addEventListener('click', () => { if (!outputBlob) return; const link = document.createElement('a'); link.href = outputUrl; link.download = 'z_master_100_percent.png'; link.click(); });
-shareButton.addEventListener('click', async () => { if (!outputBlob) return; try { const file = new File([outputBlob], 'z_master_100_percent.png', { type: 'image/png' }); await navigator.share({ files: [file], title: 'Bird movement projection' }); } catch (error) { if (error.name !== 'AbortError') console.error(error); } });

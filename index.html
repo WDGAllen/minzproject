@@ -24,6 +24,11 @@
         <input id="video-file" type="file" accept="video/*,.mov" />
         <p id="file-name" class="file-name" aria-live="polite">No video selected</p>
         <button id="generate" class="primary" type="button" disabled>Generate projection</button>
+        <fieldset class="output-options">
+          <legend>Additional projections</legend>
+          <label><input id="every-2" type="checkbox" checked /> Also generate every-2nd-frame projections</label>
+          <label><input id="every-3" type="checkbox" checked /> Also generate every-3rd-frame projections</label>
+        </fieldset>
       </section>
 
       <section id="progress-panel" class="card progress-card" hidden aria-live="polite">
@@ -34,11 +39,7 @@
 
       <section id="result-panel" class="card result-card" hidden aria-labelledby="result-heading">
         <div class="result-heading"><div><p class="eyebrow">Finished</p><h2 id="result-heading">Your projection</h2></div><span id="result-size"></span></div>
-        <div class="image-wrap"><img id="result-image" alt="Minimum-intensity projection of the selected video" /></div>
-        <div class="result-actions">
-          <button id="save" class="primary" type="button">Save image</button>
-          <button id="share" class="secondary" type="button" hidden>Share</button>
-        </div>
+        <div id="result-images"></div>
       </section>
 
       <p id="error" class="error" role="alert" hidden></p>
