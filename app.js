@@ -76,6 +76,8 @@ async function generateProjection() {
     debug('Metadata loaded', `file=${selectedFile.name}\nvideo=${width}x${height}\nduration=${video.duration.toFixed(3)} s\nreadyState=${video.readyState}\nnetworkState=${video.networkState}`);
     frameCanvas.width = width; frameCanvas.height = height;
     const context = frameCanvas.getContext('2d', { willReadFrequently: true });
+    const useMaximum = document.querySelector('#projection-mode').checked;
+    const modeName = useMaximum ? 'maximum' : 'minimum';
     const variants = [{ step: 1, offset: 0, title: 'FULL PROJECTION', label: '' }];
     if (document.querySelector('#every-2').checked) for (let offset=0; offset<2; offset++) variants.push({step:2,offset,title:'EVERY 2ND FRAME',label:String.fromCharCode(65+offset)});
     if (document.querySelector('#every-3').checked) for (let offset=0; offset<3; offset++) variants.push({step:3,offset,title:'EVERY 3RD FRAME',label:String.fromCharCode(65+offset)});
@@ -114,7 +116,7 @@ async function generateProjection() {
         debug(`Skipped empty decoded frame ${index + 1}`, 'The first canvas read was all black; accumulator not initialized.');
         continue;
       }
-      for (const v of variants) if (index >= v.offset && (index-v.offset)%v.step===0) { const minimum=v.minimum; if(v.first){for(let p=0,q=0;q<minimum.length;p+=4,q+=3){minimum[q]=source[p];minimum[q+1]=source[p+1];minimum[q+2]=source[p+2];}v.first=false;} else {for(let p=0,q=0;q<minimum.length;p+=4,q+=3){minimum[q]=Math.min(minimum[q],source[p]);minimum[q+1]=Math.min(minimum[q+1],source[p+1]);minimum[q+2]=Math.min(minimum[q+2],source[p+2]);}} }
+      for (const v of variants) if (index >= v.offset && (index-v.offset)%v.step===0) { const minimum=v.minimum; if(v.first){for(let p=0,q=0;q<minimum.length;p+=4,q+=3){minimum[q]=source[p];minimum[q+1]=source[p+1];minimum[q+2]=source[p+2];}v.first=false;} else {for(let p=0,q=0;q<minimum.length;p+=4,q+=3){minimum[q]=useMaximum?Math.max(minimum[q],source[p]):Math.min(minimum[q],source[p]);minimum[q+1]=useMaximum?Math.max(minimum[q+1],source[p+1]):Math.min(minimum[q+1],source[p+1]);minimum[q+2]=useMaximum?Math.max(minimum[q+2],source[p+2]):Math.min(minimum[q+2],source[p+2]);}} }
       const now=performance.now();
       if (livePreview && !variants[0].first && (now-lastPreviewAt>=10000 || index===frameCount-1)) {
         const previewContext=previewCanvas.getContext('2d'); const image=previewContext.createImageData(previewCanvas.width,previewCanvas.height); const minimum=variants[0].minimum;
@@ -135,7 +137,7 @@ async function generateProjection() {
       let group=resultImages.querySelector(`[data-group="${v.title}"]`);
       if(!group){group=document.createElement('section');group.dataset.group=v.title;group.className='projection-group';const heading=document.createElement('h3');heading.textContent=v.title;group.append(heading);resultImages.append(group);}
       const article=document.createElement('article'); if(v.label){const label=document.createElement('h4');label.textContent=`Image ${v.label}`;article.append(label);}
-      const wrap=document.createElement('div');wrap.className='image-wrap';const img=document.createElement('img');img.src=url;img.width=width;img.height=height;img.alt=`${v.title}${v.label?` ${v.label}`:''} minimum-intensity projection`;wrap.append(img);article.append(wrap);
+      const wrap=document.createElement('div');wrap.className='image-wrap';const img=document.createElement('img');img.src=url;img.width=width;img.height=height;img.alt=`${v.title}${v.label?` ${v.label}`:''} ${modeName}-intensity projection`;wrap.append(img);article.append(wrap);
       const save=document.createElement('button');save.className='secondary save-image';save.textContent='Save image';save.addEventListener('click',()=>{const a=document.createElement('a');a.href=url;a.download=`projection-${v.step}-offset-${v.offset}.png`;a.click();});article.append(save);group.append(article);
     }
     resultPanel.hidden=false; previewPanel.hidden=true; setProgress(100,'Projections ready.');
